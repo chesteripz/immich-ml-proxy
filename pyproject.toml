@@ -1,0 +1,48 @@
+[project]
+name = "immich-embeddinggemma"
+version = "0.1.0"
+description = "Immich-compatible ML service that embeds photos and search queries with EmbeddingGemma 2"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "numpy>=2.0",
+    "orjson>=3.10",
+    "pillow>=11.0",
+    "python-multipart>=0.0.20",
+    "sentence-transformers[image]>=6.1.0",
+    "torch",
+    "torchvision",
+    "uvicorn[standard]>=0.34",
+]
+
+[project.scripts]
+immich-embeddinggemma = "immich_embeddinggemma.main:main"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/immich_embeddinggemma"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
