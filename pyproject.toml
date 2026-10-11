@@ -1,29 +1,27 @@
 [project]
-name = "immich-embeddinggemma"
+name = "immich-ml-proxy"
 version = "0.1.0"
-description = "Immich-compatible ML service that embeds photos and search queries with EmbeddingGemma 2"
+description = "Immich-compatible ML proxy for llama-server embeddings and an Immich ML service"
 readme = "README.md"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.115",
-    "numpy>=2.0",
+    "httpx>=0.28",
     "orjson>=3.10",
     "pillow>=11.0",
     "python-multipart>=0.0.20",
-    "sentence-transformers[image]>=6.1.0",
-    "torch",
-    "torchvision",
     "uvicorn[standard]>=0.34",
 ]
 
 [project.scripts]
-immich-embeddinggemma = "immich_embeddinggemma.main:main"
+immich-ml-proxy = "immich_ml_proxy.main:main"
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28",
+    "pre-commit>=4.6.2",
     "pytest>=8.3",
     "pytest-asyncio>=0.25",
+    "ruff>=0.16.10",
 ]
 
 [build-system]
@@ -31,18 +29,32 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/immich_embeddinggemma"]
-
-[tool.uv.sources]
-torch = { index = "pytorch-cpu" }
-torchvision = { index = "pytorch-cpu" }
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
+packages = ["src/immich_ml_proxy"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 120
+exclude = ["manage.py", "migrations"]
+
+[tool.ruff.lint.pycodestyle]
+max-line-length = 280
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "single"
+
+[tool.mypy]
+python_version = "3.14"
+ignore_missing_imports = true
+
+[tool.djlint]
+ignore_blocks = "block,cache"
+custom_blocks = "cache"
+blank_line_after_tag = "endblock"

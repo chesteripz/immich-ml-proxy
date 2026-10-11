@@ -1,0 +1,22 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "Describe this image"
+        }
+      ]
+    },
+    {
+      "content": [
+        {
+          "type": "text",
+          "text": "hello"
+        }
+      ]
+    }
+  ],
+  "encoding_format": "float",
+  "model": "embeddinggemma2"
+}

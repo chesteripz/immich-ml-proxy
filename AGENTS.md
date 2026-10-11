@@ -1,36 +1,38 @@
 # Agent notes
 
-This service is a drop-in for Immich's smart-search calls, not a full Immich ML clone. The contract lives in Immich (`machine-learning/immich_ml/main.py` and `server/src/repositories/machine-learning.repository.ts`) and is mirrored by `/home/chester/code/immich-ml-metal`.
+This service is a drop-in for Immich's machine-learning calls. It does not load weights.
 
 ## API
 
 - `GET /` → `{"message":"Immich ML"}`
 - `GET /ping` → body `pong` (Immich health checks this)
 - `POST /predict` multipart: `entries` (JSON), plus `image` and/or `text`
-- Clip visual and textual results go in `response["clip"]` as a JSON array string (`orjson` + `OPT_SERIALIZE_NUMPY`), same as Immich's `serialize_np_array`
+- Clip visual and textual results go in `response["clip"]` as a JSON array string
 - Image replies include `imageHeight` and `imageWidth`
-- `facial-recognition` and `ocr` return 501. Do not invent face boxes or OCR text
+- `facial-recognition` and `ocr` are forwarded as the original multipart body to `{IMMICH_ML_URL}/predict`. Return that service's JSON and status code. Do not invent face boxes or OCR text
 
-Immich chooses the vector width from the CLIP **model name** in its admin settings. This process ignores that name and always runs EmbeddingGemma 2. Keep `ML_TRUNCATE_DIM` aligned with the Immich model (512 for `ViT-B-32__openai`, 768 for `ViT-L-14__openai`).
+The clip entry's `modelName` must identify EmbeddingGemma. Compare the last `/` segment with `-`, `_`, and `:` removed; it has to start with `embeddinggemma`. Anything else is HTTP 400.
 
-## Model
+## Upstreams
 
-Follow `embeddinggemma-2-the-developer-guide.md`:
+`LLAMA_SERVER_URL` and `IMMICH_ML_URL` are required comma-separated lists. One URL is a list of one. Read them from the environment (`.env`, seeded from `sample.env`). The project name is `immich-ml-proxy`; the package is `immich_ml_proxy`.
 
-- `sentence-transformers` ≥ 6.1
-- Text: `encode(..., prompt_name="SearchQuery")`
-- Images: `encode({"image": pil})` with no prompt
-- Truncate with `truncate_dim` in `{768, 512, 256, 128}` and `normalize_embeddings=True`
-- Default load passes `config_kwargs={"audio_config": None}` so audio weights are not allocated. Photos and video thumbnails only need the vision tower
-- Device is CPU. `ML_DEVICE` other than `cpu` must keep failing until a CUDA path exists. `torch` and `torchvision` both come from the PyTorch CPU index in `pyproject.toml`. The PyPI `torchvision` wheel does not register `torchvision::nms` against that CPU build, so leave `torchvision` as a direct dependency on that index.
+POST `{llama}/v1/embeddings` using the shape in `sample-payload.json`:
 
-Do not download weights in tests. `tests/conftest.py` sets `ML_STUB=1` before the app is imported. `StubEncoder` must stay free of `sentence_transformers` imports.
+- `encoding_format` is `float`
+- `model` comes from `LLAMA_MODEL` (default `embeddinggemma2`)
+- Llama and Immich ML base URLs come from `LLAMA_SERVER_URL` and `IMMICH_ML_URL`
+- Text: `{"input":[{"content":[{"type":"text","text":"..."}]}]}`
+- Image: one `image_url` part, `url` set to `data:<media-type>;base64,...` of the original upload bytes
+- Read `data[0].embedding` and return it unchanged
+
+Each request starts at the next server (round-robin). Timeouts, connection errors, and HTTP 5xx try the remaining servers in that order. HTTP 4xx is returned from the server that produced it. If every llama attempt times out, respond 503. Other total failures are 502.
+
+Do not add a local encoder, torch, or sentence-transformers. Tests install an `httpx` transport on `embedder` and `ml_proxy` and must not reach the network.
 
 ## Layout
 
-- `src/immich_embeddinggemma/config.py` — env settings
-- `src/immich_embeddinggemma/embedder.py` — Gemma load/encode and the stub
-- `src/immich_embeddinggemma/main.py` — FastAPI app. Settings are read at import
-- Run with `uv run immich-embeddinggemma` (one worker)
-
-Inference is serialized with a lock inside `GemmaEncoder`. Keep that if you add concurrency; SentenceTransformer encode is not assumed to be thread-safe.
+- `src/immich_ml_proxy/config.py` — env settings
+- `src/immich_ml_proxy/upstream.py` — llama-server client, Immich ML proxy, and round-robin
+- `src/immich_ml_proxy/main.py` — FastAPI app. Settings are read at import
+- Run with `uv run immich-ml-proxy` (one worker)

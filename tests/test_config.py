@@ -1,27 +1,40 @@
 import pytest
 
-from immich_embeddinggemma.config import Settings
+from immich_ml_proxy.config import Settings
 
 
-def test_defaults_are_cpu_512(monkeypatch):
-    monkeypatch.delenv("ML_STUB", raising=False)
-    monkeypatch.delenv("ML_DEVICE", raising=False)
-    monkeypatch.delenv("ML_TRUNCATE_DIM", raising=False)
-    monkeypatch.delenv("ML_MODEL_ID", raising=False)
-    settings = Settings.from_env()
-    assert settings.device == "cpu"
-    assert settings.truncate_dim == 512
-    assert settings.model_id == "google/embeddinggemma-2"
-    assert settings.stub_mode is False
+def test_requires_upstream_urls(monkeypatch):
+    monkeypatch.delenv('LLAMA_SERVER_URL', raising=False)
+    monkeypatch.delenv('LLAMA_MODEL', raising=False)
+    monkeypatch.delenv('IMMICH_ML_URL', raising=False)
+    with pytest.raises(ValueError, match='LLAMA_SERVER_URL'):
+        Settings.from_env()
 
-
-def test_rejects_cuda_until_implemented(monkeypatch):
-    monkeypatch.setenv("ML_DEVICE", "cuda")
-    with pytest.raises(ValueError, match="CPU"):
+    monkeypatch.setenv('LLAMA_SERVER_URL', 'http://127.0.0.1:8080')
+    with pytest.raises(ValueError, match='IMMICH_ML_URL'):
         Settings.from_env()
 
 
-def test_rejects_unknown_dim(monkeypatch):
-    monkeypatch.setenv("ML_TRUNCATE_DIM", "384")
-    with pytest.raises(ValueError, match="ML_TRUNCATE_DIM"):
+def test_reads_upstream_overrides(monkeypatch):
+    monkeypatch.setenv('LLAMA_SERVER_URL', 'http://127.0.0.1:8080/')
+    monkeypatch.setenv('LLAMA_MODEL', 'embeddinggemma2')
+    settings = Settings.from_env()
+    assert settings.llama_server_urls == ('http://127.0.0.1:8080',)
+    assert settings.model == 'embeddinggemma2'
+
+
+def test_splits_comma_separated_urls(monkeypatch):
+    monkeypatch.setenv(
+        'LLAMA_SERVER_URL',
+        'http://llama-a:31234, http://llama-b:31234/',
+    )
+    monkeypatch.setenv('IMMICH_ML_URL', 'http://ml-a:3003,http://ml-b:3003')
+    settings = Settings.from_env()
+    assert settings.llama_server_urls == ('http://llama-a:31234', 'http://llama-b:31234')
+    assert settings.immich_ml_urls == ('http://ml-a:3003', 'http://ml-b:3003')
+
+
+def test_rejects_empty_upstream(monkeypatch):
+    monkeypatch.setenv('LLAMA_SERVER_URL', '  , ')
+    with pytest.raises(ValueError, match='LLAMA_SERVER_URL'):
         Settings.from_env()
